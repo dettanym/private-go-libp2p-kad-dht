@@ -252,6 +252,10 @@ func (dht *IpfsDHT) handlePing(_ context.Context, p peer.ID, pmes *pb.Message) (
 	return pmes, nil
 }
 
+func (dht *IpfsDHT) private_handleFindPeer(ctx context.Context, from peer.ID, pmes_pir_request *pb.Message) (_ *pb.Message, _err error) {
+	return pmes_pir_request, nil
+}
+
 func (dht *IpfsDHT) handleFindPeer(ctx context.Context, from peer.ID, pmes *pb.Message) (_ *pb.Message, _err error) {
 	resp := pb.NewMessage(pmes.GetType(), nil, pmes.GetClusterLevel())
 	var closest []peer.ID
@@ -304,6 +308,10 @@ func (dht *IpfsDHT) handleFindPeer(ctx context.Context, from peer.ID, pmes *pb.M
 
 	resp.CloserPeers = pb.PeerInfosToPBPeers(dht.host.Network(), withAddresses)
 	return resp, nil
+}
+
+func (dht *IpfsDHT) private_handleGetProviders(ctx context.Context, p peer.ID, pmes_pir_request *pb.Message) (_ *pb.Message, _err error) {
+	return pmes_pir_request, nil
 }
 
 func (dht *IpfsDHT) handleGetProviders(ctx context.Context, p peer.ID, pmes *pb.Message) (_ *pb.Message, _err error) {
