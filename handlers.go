@@ -24,6 +24,8 @@ type dhtHandler func(context.Context, peer.ID, *pb.Message) (*pb.Message, error)
 
 func (dht *IpfsDHT) handlerForMsgType(t pb.Message_MessageType) dhtHandler {
 	switch t {
+	case pb.Message_FIND_NODE_PIR_REQUEST:
+		return dht.private_handleFindPeer
 	case pb.Message_FIND_NODE:
 		return dht.handleFindPeer
 	case pb.Message_PING:
@@ -45,6 +47,8 @@ func (dht *IpfsDHT) handlerForMsgType(t pb.Message_MessageType) dhtHandler {
 			return dht.handleAddProvider
 		case pb.Message_GET_PROVIDERS:
 			return dht.handleGetProviders
+		case pb.Message_GET_PROVIDERS_PIR_REQUEST:
+			return dht.private_handleGetProviders
 		}
 	}
 
