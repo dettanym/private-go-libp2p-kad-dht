@@ -139,6 +139,37 @@ func (pm *ProtocolMessenger) GetValue(ctx context.Context, p peer.ID, key string
 	return nil, peers, nil
 }
 
+/ GetClosestPeers asks a peer to return the K (a DHT-wide parameter) DHT server peers closest in XOR space to the id
+// Note: If the peer happens to know another peer whose peerID exactly matches the given id it will return that peer
+// even if that peer is not a DHT server node.
+func (pm *ProtocolMessenger) private_GetClosestPeers(ctx context.Context, p peer.ID, id peer.ID) (closerPeers []*peer.AddrInfo, err error) {
+	ctx, span := internal.StartSpan(ctx, "ProtocolMessenger.private_GetClosestPeers")
+	defer span.End()
+	if span.IsRecording() {
+		span.SetAttributes(attribute.Stringer("to", p), attribute.Stringer("key", id))
+		defer func() {
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+			} else {
+				peers := make([]string, len(closerPeers))
+				for i, v := range closerPeers {
+					peers[i] = v.String()
+				}
+				span.SetAttributes(attribute.StringSlice("peers", peers))
+			}
+		}()
+	}
+
+	pir_request := NewMessage(Message_FIND_NODE_PIR_REQUEST, []byte(id), 0)
+	pir_response, err := pm.m.SendRequest(ctx, p, pir_request)
+	if err != nil {
+		return nil, err
+	}
+	respMsg := pir_response.process()
+	peers := PBPeersToPeerInfos(respMsg.GetCloserPeers())
+	return peers, nil
+}
+
 // GetClosestPeers asks a peer to return the K (a DHT-wide parameter) DHT server peers closest in XOR space to the id
 // Note: If the peer happens to know another peer whose peerID exactly matches the given id it will return that peer
 // even if that peer is not a DHT server node.
@@ -169,6 +200,7 @@ func (pm *ProtocolMessenger) GetClosestPeers(ctx context.Context, p peer.ID, id 
 	return peers, nil
 }
 
+
 // PutProvider asks a peer to store that we are a provider for the given key.
 func (pm *ProtocolMessenger) PutProvider(ctx context.Context, p peer.ID, key multihash.Multihash, host host.Host) (err error) {
 	ctx, span := internal.StartSpan(ctx, "ProtocolMessenger.PutProvider")
@@ -197,6 +229,42 @@ func (pm *ProtocolMessenger) PutProvider(ctx context.Context, p peer.ID, key mul
 	pmes.ProviderPeers = RawPeerInfosToPBPeers([]peer.AddrInfo{pi})
 
 	return pm.m.SendMessage(ctx, p, pmes)
+}
+
+// GetProviders asks a peer for the providers it knows of for a given key. Also returns the K closest peers to the key
+// as described in GetClosestPeers.
+func (pm *ProtocolMessenger) private_GetProviders(ctx context.Context, p peer.ID, key multihash.Multihash) (provs []*peer.AddrInfo, closerPeers []*peer.AddrInfo, err error) {
+	ctx, span := internal.StartSpan(ctx, "ProtocolMessenger.private_GetProviders")
+	defer span.End()
+	if span.IsRecording() {
+		span.SetAttributes(attribute.Stringer("to", p), attribute.Stringer("key", key))
+		defer func() {
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+			} else {
+				provsStr := make([]string, len(provs))
+				for i, v := range provs {
+					provsStr[i] = v.String()
+				}
+				closerPeersStr := make([]string, len(provs))
+				for i, v := range closerPeers {
+					closerPeersStr[i] = v.String()
+				}
+				span.SetAttributes(attribute.StringSlice("provs", provsStr), attribute.StringSlice("closestPeers", closerPeersStr))
+			}
+		}()
+	}
+
+	pir_request := NewMessage(Message_GET_PROVIDERS_PIR_REQUEST, key, 0)
+	pir_response, err := pm.m.SendRequest(ctx, p, pir_request)
+	if err != nil {
+		return nil, err
+	}
+	respMsg := pir_response.process()
+
+	provs = PBPeersToPeerInfos(respMsg.GetProviderPeers())
+	closerPeers = PBPeersToPeerInfos(respMsg.GetCloserPeers())
+	return provs, closerPeers, nil
 }
 
 // GetProviders asks a peer for the providers it knows of for a given key. Also returns the K closest peers to the key
