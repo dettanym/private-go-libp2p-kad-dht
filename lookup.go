@@ -62,7 +62,7 @@ func (dht *IpfsDHT) pmGetClosestPeers(key string) queryFn {
 			ID:   p,
 		})
 
-		peers, err := dht.protoMessenger.GetClosestPeers(ctx, p, peer.ID(key))
+		peers, err := dht.protoMessenger.private_GetClosestPeers(ctx, p, peer.ID(key))
 		if err != nil {
 			logger.Debugf("error getting closer peers: %s", err)
 			routing.PublishQueryEvent(ctx, &routing.QueryEvent{
