@@ -72,7 +72,7 @@ func (dht *IpfsDHT) PutValue(ctx context.Context, key string, value []byte, opts
 		return err
 	}
 
-	peers, err := dht.GetClosestPeers(ctx, key)
+	peers, err := dht.getClosestPeers(ctx, key)
 	if err != nil {
 		return err
 	}
@@ -443,7 +443,7 @@ func (dht *IpfsDHT) classicProvide(ctx context.Context, keyMH multihash.Multihas
 	}
 
 	var exceededDeadline bool
-	peers, err := dht.GetClosestPeers(closerCtx, string(keyMH))
+	peers, err := dht.getClosestPeers(closerCtx, string(keyMH))
 	switch err {
 	case context.DeadlineExceeded:
 		// If the _inner_ deadline has been exceeded but the _outer_
@@ -577,7 +577,7 @@ func (dht *IpfsDHT) findProvidersAsyncRoutine(ctx context.Context, key multihash
 				ID:   p,
 			})
 
-			provs, closest, err := dht.protoMessenger.GetProviders(ctx, p, key)
+			provs, closest, err := dht.protoMessenger.private_getProviders(ctx, p, key)
 			if err != nil {
 				return nil, err
 			}
@@ -652,7 +652,7 @@ func (dht *IpfsDHT) FindPeer(ctx context.Context, id peer.ID) (_ peer.AddrInfo, 
 				ID:   p,
 			})
 
-			peers, err := dht.protoMessenger.GetClosestPeers(ctx, p, id)
+			peers, err := dht.protoMessenger.private_GetClosestPeers(ctx, p, id)
 			if err != nil {
 				logger.Debugf("error getting closer peers: %s", err)
 				return nil, err
