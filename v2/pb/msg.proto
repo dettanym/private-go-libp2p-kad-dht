@@ -19,6 +19,8 @@ message Message {
 		GET_PROVIDERS = 3;
 		FIND_NODE = 4;
 		PING = 5;
+		PRIVATE_FIND_NODE = 32;
+		PRIVATE_GET_PROVIDERS = 33;
 	}
 
 	enum ConnectionType {
@@ -69,4 +71,18 @@ message Message {
 	// Used to return Providers
 	// GET_VALUE, ADD_PROVIDER, GET_PROVIDERS
 	repeated Peer provider_peers = 9;
+
+	// Used in PRIVATE_FIND_NODE and PRIVATE_GET_PROVIDERS
+	// Represents PIR Request. Encrypts a record.
+	HECiphertext PIR_Request = 32;
+
+	// Used in PRIVATE_FIND_NODE and PRIVATE_GET_PROVIDERS
+	// Represents PIR Response.
+	// Corresponds to encryption of closerPeers or providerPeers
+	HECiphertext PIR_Response = 33;
+}
+
+// Represents a block of Homomorphically Encrypted Ciphertext
+message HECiphertext {
+	bytes ct_block = 1;
 }
