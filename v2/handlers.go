@@ -5,8 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
 	ds "github.com/ipfs/go-datastore"
+	"github.com/libp2p/go-libp2p-kad-dht/v2/private_routing"
 	record "github.com/libp2p/go-libp2p-record"
 	recpb "github.com/libp2p/go-libp2p-record/pb"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -278,3 +278,71 @@ func (d *DHT) closerPeers(ctx context.Context, remote peer.ID, target kadt.Key) 
 
 	return filtered
 }
+
+// Responds to a PIR request in a private FindNode message with a PIR response.
+func (d *DHT) handlePrivateFindPeer(ctx context.Context, remote peer.ID, msg *pb.Message) (*pb.Message, error) {
+	_, span := d.tele.Tracer.Start(ctx, "DHT.handlePrivateFindPeer", otel.WithAttributes(attribute.String("remote", remote.String())))
+	defer span.End()
+
+	pirRequest := msg.GetEncryptedQuery()
+	if pirRequest == nil {
+		return nil, fmt.Errorf("no PIR Request sent in the message")
+	}
+
+	// TODO: d.host.Peerstore() is of type Peerstore, not peerStore.AddrBook?
+	encrypted_peer_ids, err := private_routing.RunPIRforCloserPeersRecords(pirRequest, d.host.Peerstore())
+	if err != nil {
+		return nil, err
+	}
+
+	pirResponse := &pb.PIR_Response{
+		Id:          pirRequest.Id,
+		CloserPeers: encrypted_peer_ids,
+	}
+
+	response := &pb.Message{
+		EncryptedRecords: pirResponse,
+	}
+
+	return response, nil
+}
+
+// Responds to a PIR request in a private GetProviders message with a PIR response.
+func (d *DHT) private_GetProviderRecords(ctx context.Context, remote peer.ID, msg *pb.Message) (*pb.Message, error) {
+	_, span := d.tele.Tracer.Start(ctx, "DHT.handlePrivateFindPeer", otel.WithAttributes(attribute.String("remote", remote.String())))
+	defer span.End()
+
+	pirRequest := msg.GetEncryptedQuery()
+	if pirRequest == nil {
+		return nil, fmt.Errorf("no PIR Request sent in the message")
+	}
+
+	// Then use the record as an index to do CPIR over addrBook.
+	encrypted_closer_peers, err := private_routing.RunPIRforCloserPeersRecords(pirRequest, d.host.Peerstore())
+	if err != nil {
+		return nil, err
+	}
+
+	backend, ok := d.backends[namespaceProviders]
+	if !ok {
+		return nil, fmt.Errorf("unsupported record type: %s", namespaceProviders)
+	}
+
+	// TODO: Figure out a reference to the dataStore attribute of the Backend.
+	// Or maybe this (runPIRforProviderPeerRecords) needs to be called from a PrivateFetch method on the Backend interface.
+	// The PrivateFetch method can compute the join privately and then just run this method internally, returning the encrypted providerpeers.
+	encrypted_provider_peers, err := private_routing.RunPIRforProviderPeersRecords(pirRequest, d.host.Peerstore(), nil)
+	pirResponse := &pb.PIR_Response{
+		Id:            pirRequest.Id,
+		CloserPeers:   encrypted_closer_peers,
+		ProviderPeers: encrypted_provider_peers,
+	}
+
+	response := &pb.Message{
+		EncryptedRecords: pirResponse,
+	}
+
+	return response, nil
+}
+
+
