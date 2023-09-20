@@ -72,17 +72,27 @@ message Message {
 	// GET_VALUE, ADD_PROVIDER, GET_PROVIDERS
 	repeated Peer provider_peers = 9;
 
-	// Used in PRIVATE_FIND_NODE and PRIVATE_GET_PROVIDERS
-	// Represents PIR Request. Encrypts a record.
-	HECiphertext PIR_Request = 32;
+	PIR_Request encrypted_query = 32;
 
-	// Used in PRIVATE_FIND_NODE and PRIVATE_GET_PROVIDERS
-	// Represents PIR Response.
-	// Corresponds to encryption of closerPeers or providerPeers
-	HECiphertext PIR_Response = 33;
+	PIR_Response encrypted_records = 33;
 }
 
-// Represents a block of Homomorphically Encrypted Ciphertext
-message HECiphertext {
-	bytes ct_block = 1;
+// Used in PRIVATE_FIND_NODE and PRIVATE_GET_PROVIDERS
+// Represents PIR Request or Response.
+message PIR_Message {
+	// Represents a block of Homomorphically Encrypted Ciphertext
+	bytes ciphertext = 1;
+}
+
+// ID should just be a hash of the ciphertext. Used as a request ID.
+// Does not correspond to any keys in the Kademlia ID or peer ID spaces.
+message PIR_Request {
+	bytes id = 1;
+	PIR_Message key = 2;
+}
+
+message PIR_Response {
+	bytes id = 1;
+	PIR_Message closer_peers = 2;
+	PIR_Message provider_peers = 3;
 }
