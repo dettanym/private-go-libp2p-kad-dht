@@ -232,6 +232,11 @@ func (d *DHT) handleMsg(ctx context.Context, remote peer.ID, req *pb.Message) (*
 		return d.handleAddProvider(ctx, remote, req)
 	case pb.Message_GET_PROVIDERS:
 		return d.handleGetProviders(ctx, remote, req)
+	case pb.Message_PRIVATE_FIND_NODE:
+		return d.handlePrivateFindPeer(ctx, remote, req)
+	case pb.Message_PRIVATE_GET_PROVIDERS:
+		return d.handlePrivateGetProviderRecords(ctx, remote, req)
+
 	default:
 		return nil, fmt.Errorf("can't handle received message: %s", req.GetType().String())
 	}

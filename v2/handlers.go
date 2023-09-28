@@ -308,8 +308,8 @@ func (d *DHT) handlePrivateFindPeer(ctx context.Context, remote peer.ID, msg *pb
 }
 
 // Responds to a PIR request in a private GetProviders message with a PIR response.
-func (d *DHT) private_GetProviderRecords(ctx context.Context, remote peer.ID, msg *pb.Message) (*pb.Message, error) {
-	_, span := d.tele.Tracer.Start(ctx, "DHT.handlePrivateFindPeer", otel.WithAttributes(attribute.String("remote", remote.String())))
+func (d *DHT) handlePrivateGetProviderRecords(ctx context.Context, remote peer.ID, msg *pb.Message) (*pb.Message, error) {
+	_, span := d.tele.Tracer.Start(ctx, "DHT.handlePrivateGetProviderRecords", otel.WithAttributes(attribute.String("remote", remote.String())))
 	defer span.End()
 
 	pirRequest := msg.GetEncryptedQuery()
