@@ -301,6 +301,7 @@ func (d *DHT) handlePrivateFindPeer(ctx context.Context, remote peer.ID, msg *pb
 	}
 
 	response := &pb.Message{
+		Type:             pb.Message_PRIVATE_FIND_NODE,
 		EncryptedRecords: pirResponse,
 	}
 
@@ -339,10 +340,9 @@ func (d *DHT) handlePrivateGetProviderRecords(ctx context.Context, remote peer.I
 	}
 
 	response := &pb.Message{
+		Type:             pb.Message_PRIVATE_GET_PROVIDERS,
 		EncryptedRecords: pirResponse,
 	}
 
 	return response, nil
 }
-
-
