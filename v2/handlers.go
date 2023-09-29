@@ -289,11 +289,19 @@ func (d *DHT) handlePrivateFindPeer(ctx context.Context, remote peer.ID, msg *pb
 		return nil, fmt.Errorf("no PIR Request sent in the message")
 	}
 
-	// TODO: d.host.Peerstore() is of type Peerstore, not peerStore.AddrBook?
+	bucketsWithAddrInfos := d.normalizeRTJoinedWithPeerStore()
+
 	encrypted_peer_ids, err := private_routing.RunPIRforCloserPeersRecords(pirRequest, d.host.Peerstore())
 	if err != nil {
 		return nil, err
 	}
+
+	// TODO Ask Gui: handleFindPeer also looks up peerStore directly for the target key and adds it to the closerPeers.
+	// This might be necessary as we may not store the node's (KadID, PeerID) if our bucket is full,
+	// but we may still record the addresses of the node in the peer store?
+	// So do we need to do another PIR over the peer store?
+	// Or before we normalize the RT,
+	// can we "fill up" our RT with kadID, peerID of records that are in the peerStore but not in the RT?
 
 	pirResponse := &pb.PIR_Response{
 		Id:          pirRequest.Id,
@@ -345,4 +353,23 @@ func (d *DHT) handlePrivateGetProviderRecords(ctx context.Context, remote peer.I
 	}
 
 	return response, nil
+}
+
+func (d *DHT) normalizeRTJoinedWithPeerStore() [][]*pb.Message_Peer {
+	// var peers [][]peerInfo[K, N]
+	bucketsWithPeerInfos := d.rt.NormalizeRT()
+
+	bucketsWithAddrInfos := make([][]*pb.Message_Peer, 0, len(bucketsWithPeerInfos))
+
+	for bid, bucket := range bucketsWithPeerInfos {
+		addrInfos := make([]*pb.Message_Peer, 0, len(bucket))
+		for p := range bucket {
+			pid := peer.ID(p)
+			peerInfo := d.host.Peerstore().PeerInfo(pid)
+			addrInfos = append(addrInfos, pb.FromAddrInfo(peerInfo))
+		}
+		bucketsWithAddrInfos[bid] = addrInfos
+	}
+
+	return bucketsWithAddrInfos
 }
