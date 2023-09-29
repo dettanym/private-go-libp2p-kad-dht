@@ -356,18 +356,48 @@ func (d *DHT) handlePrivateGetProviderRecords(ctx context.Context, remote peer.I
 	return response, nil
 }
 
+// This function first normalizes the RT --- filling up any buckets that are not full with
+// nearest nodes from other buckets, given only the common prefix length for that bucket.
+// The (normalized) RT consists of <kad ID, peer ID> records.
+// The d.host.Peerstore() consists of <peer ID, peer address> records.
+// We then join these key-value stores here, oblivious to the target.
 func (d *DHT) normalizeRTJoinedWithPeerStore() [][]*pb.Message_Peer {
-	// var peers [][]peerInfo[K, N]
+	// TODO: How to extend this function to provide the functionality in Line 52 in handleFindPeer
+	//  obliviously to the target key.
+	// Line 52 in handleFindPeer looks up the peerstore with the target kademlia ID,
+	// even though closerPeer looks up the peerStore with the output of
+	// d.rt.NearestNodes(..)
+	// See the comments there --- the rationale is that the target may be in a bucket
+	// of the RT that was full, so we don't store its <kad ID, peer ID> in the RT.
+	// But we still store its <peer ID, multiaddress array> in the peerstore.
+
+	// So to do this obliviously to the target, we add some steps to *this function*,
+	//  which is run before answering the PIR request.
+	// We can fill up the RT with <kad ID, peer ID> of nodes that *are* in the peerstore but *not* in the RT.
+	// This effectively adds more entries to the RT; some other than the target which may not have been there earlier.
+	// So we need to ask Gui if this is acceptable. Let's suppose it is acceptable.
+	// Then, we would've ensured that every <peer ID, multiaddress []> in the peerstore
+	// has a corresponding <kad ID, peer ID> in the RT.
+
+	// Then we would run NormalizeRT as seen below.
+	// (Buckets might be very full already, so we might not need to normalize some buckets.)
+	// Then the join will ensure that *any* target which was earlier in the peerstore,
+	// but not in the RT, will *also* be included in the join output:
+	// Join: <target's kadID, target's peerID> <target's peerID, target's address>
+
+	// Bucket -> <Kad ID, Peer ID>
 	bucketsWithPeerInfos := d.rt.NormalizeRT()
 
 	bucketsWithAddrInfos := make([][]*pb.Message_Peer, 0, len(bucketsWithPeerInfos))
 
+	// Bucket -> <Kad ID, Peer ID and multiaddress array>
 	for bid, bucket := range bucketsWithPeerInfos {
 		addrInfos := make([]*pb.Message_Peer, 0, len(bucket))
 		for p := range bucket {
 			pid := peer.ID(p)
 			peerInfo := d.host.Peerstore().PeerInfo(pid)
-			addrInfos = append(addrInfos, pb.FromAddrInfo(peerInfo))
+			messagePeer := pb.FromAddrInfo(peerInfo)
+			addrInfos = append(addrInfos, messagePeer)
 		}
 		bucketsWithAddrInfos[bid] = addrInfos
 	}
