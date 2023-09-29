@@ -7,9 +7,9 @@ import (
 	"github.com/libp2p/go-libp2p/core/peerstore"
 )
 
-func RunPIRforCloserPeersRecords(req *pb.PIR_Request, addrBook peerstore.AddrBook) (*pb.PIR_Message, error) {
+func RunPIRforCloserPeersRecords(req *pb.PIR_Request, ModifiedRT [][]*pb.Message_Peer) (*pb.PIR_Message, error) {
 	pir_request := req.Key
-	return nil, fmt.Errorf("could not compute PIR response over addressbook of peer records")
+	return nil, fmt.Errorf("could not compute PIR response over ModifiedRT of peer records")
 }
 
 func RunPIRforProviderPeersRecords(req *pb.PIR_Request, addrBook peerstore.AddrBook, datastore ds.Datastore) (*pb.PIR_Message, error) {

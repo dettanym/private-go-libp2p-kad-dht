@@ -291,7 +291,7 @@ func (d *DHT) handlePrivateFindPeer(ctx context.Context, remote peer.ID, msg *pb
 
 	bucketsWithAddrInfos := d.normalizeRTJoinedWithPeerStore()
 
-	encrypted_peer_ids, err := private_routing.RunPIRforCloserPeersRecords(pirRequest, d.host.Peerstore())
+	encrypted_peer_ids, err := private_routing.RunPIRforCloserPeersRecords(pirRequest, bucketsWithAddrInfos)
 	if err != nil {
 		return nil, err
 	}
@@ -326,8 +326,9 @@ func (d *DHT) handlePrivateGetProviderRecords(ctx context.Context, remote peer.I
 		return nil, fmt.Errorf("no PIR Request sent in the message")
 	}
 
-	// Then use the record as an index to do CPIR over addrBook.
-	encrypted_closer_peers, err := private_routing.RunPIRforCloserPeersRecords(pirRequest, d.host.Peerstore())
+	bucketsWithAddrInfos := d.normalizeRTJoinedWithPeerStore()
+
+	encrypted_closer_peers, err := private_routing.RunPIRforCloserPeersRecords(pirRequest, bucketsWithAddrInfos)
 	if err != nil {
 		return nil, err
 	}
