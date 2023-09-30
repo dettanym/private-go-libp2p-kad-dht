@@ -47,7 +47,7 @@ type ProvidersBackend struct {
 
 	// datastore is where we save the peer IDs providing a certain multihash.
 	// The datastore must be thread-safe.
-	datastore ds.Datastore
+	datastore DatastoreWithGetAll
 
 	// gcSkip is a sync map that marks records as to-be-skipped by the garbage
 	// collection process. TODO: this is a sub-optimal pattern.
@@ -268,6 +268,15 @@ func (p *ProvidersBackend) Validate(ctx context.Context, key string, values ...a
 	}
 
 	return bestIdx, nil
+}
+
+func (p *ProvidersBackend) checkExpiredRecords(ctx context.Context) (any, error) {
+	return nil, nil
+}
+
+func (p *ProvidersBackend) JoinTablesForPrivateFetch(ctx context.Context) (any, error) {
+	datastore, err := p.datastore.GetAll(ctx)
+	return datastore, err
 }
 
 // Close is here to implement the [io.Closer] interface. This will get called

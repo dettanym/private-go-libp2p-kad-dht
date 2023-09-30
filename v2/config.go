@@ -1,12 +1,13 @@
 package dht
 
 import (
+	"context"
 	"fmt"
 	"time"
 
 	"github.com/benbjohnson/clock"
+	leveldb "github.com/dettanym/go-ds-leveldb"
 	ds "github.com/ipfs/go-datastore"
-	leveldb "github.com/ipfs/go-ds-leveldb"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
@@ -59,15 +60,17 @@ type (
 	// only has the two forms: client or server.
 	mode string
 
-	// Datastore is an interface definition that gathers the datastore
+	// DatastoreWithGetall is an interface definition that gathers the datastore
 	// requirements. The [DHT] requires the datastore to support batching and
 	// transactions. Example datastores that implement both features are leveldb
 	// and badger. leveldb can also be used in memory - this is used as the
 	// default datastore.
-	Datastore interface {
+	DatastoreWithGetAll interface {
 		ds.Datastore
 		ds.BatchingFeature
 		ds.TxnFeature
+
+		GetAll(ctx context.Context) (KVStore map[ds.Key]string, err error)
 	}
 
 	AddressFilter func([]ma.Multiaddr) []ma.Multiaddr
@@ -155,7 +158,7 @@ type Config struct {
 	// required to register backends for the ipns, pk, and providers namespaces.
 	//
 	// This datastore must be thread-safe.
-	Datastore Datastore
+	Datastore DatastoreWithGetAll
 
 	// Logger can be used to configure a custom structured logger instance.
 	// By default go.uber.org/zap is used (wrapped in ipfs/go-log).
@@ -220,7 +223,7 @@ func DefaultRoutingTable(nodeID kadt.PeerID) (routing.RoutingTableCpl[kadt.Key, 
 }
 
 // InMemoryDatastore returns an in-memory leveldb datastore.
-func InMemoryDatastore() (Datastore, error) {
+func InMemoryDatastore() (DatastoreWithGetAll, error) {
 	return leveldb.NewDatastore("", nil)
 }
 
