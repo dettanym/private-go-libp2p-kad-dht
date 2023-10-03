@@ -366,7 +366,7 @@ func (d *DHT) handlePrivateGetProviderRecords(ctx context.Context, remote peer.I
 // The (normalized) RT consists of <kad ID, peer ID> records.
 // The d.host.Peerstore() consists of <peer ID, peer address> records.
 // We then join these key-value stores here, oblivious to the target.
-func (d *DHT) normalizeRTJoinedWithPeerStore() [][]*pb.Message_Peer {
+func (d *DHT) normalizeRTJoinedWithPeerStore(queryingPeerKadId kadt.Key) [][]*pb.Message_Peer {
 	// TODO: How to extend this function to provide the functionality in Line 52 in handleFindPeer
 	//  obliviously to the target key.
 	// Line 52 in handleFindPeer looks up the peerstore with the target kademlia ID,
@@ -390,17 +390,17 @@ func (d *DHT) normalizeRTJoinedWithPeerStore() [][]*pb.Message_Peer {
 	// but not in the RT, will *also* be included in the join output:
 	// Join: <target's kadID, target's peerID> <target's peerID, target's address>
 
-	// Bucket -> <Kad ID, Peer ID>
-	bucketsWithPeerInfos := d.rt.NormalizeRT()
+	// Bucket -> [PeerID1, PeerID2, ...]
+	bucketsWithPeerIDs := d.rt.NormalizeRT(queryingPeerKadId)
 
-	bucketsWithAddrInfos := make([][]*pb.Message_Peer, 0, len(bucketsWithPeerInfos))
+	// Bucket -> <Peer ID -> multiaddress array
+	bucketsWithAddrInfos := make([][]*pb.Message_Peer, 0, len(bucketsWithPeerIDs))
 
-	// Bucket -> <Kad ID, Peer ID and multiaddress array>
-	for bid, bucket := range bucketsWithPeerInfos {
+	// Bucket -> <Peer ID and multiaddress array>
+	for bid, bucket := range bucketsWithPeerIDs {
 		addrInfos := make([]*pb.Message_Peer, 0, len(bucket))
-		for p := range bucket {
-			pid := peer.ID(p)
-			peerInfo := d.host.Peerstore().PeerInfo(pid)
+		for peerID := range bucket {
+			peerInfo := d.host.Peerstore().PeerInfo(peerID)
 			messagePeer := pb.FromAddrInfo(peerInfo)
 			addrInfos = append(addrInfos, messagePeer)
 		}
