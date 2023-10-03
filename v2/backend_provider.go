@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"github.com/libp2p/go-libp2p-kad-dht/v2/pb"
 	"io"
 	"strings"
 	"sync"
@@ -47,6 +48,8 @@ type ProvidersBackend struct {
 
 	// datastore is where we save the peer IDs providing a certain multihash.
 	// The datastore must be thread-safe.
+	// Note: The datastore does not map key = CID to value = PeerID
+	// It maps key = CID || PeerID to value = expiry time
 	datastore DatastoreWithGetAll
 
 	// gcSkip is a sync map that marks records as to-be-skipped by the garbage
@@ -270,13 +273,77 @@ func (p *ProvidersBackend) Validate(ctx context.Context, key string, values ...a
 	return bestIdx, nil
 }
 
-func (p *ProvidersBackend) checkExpiredRecords(ctx context.Context) (any, error) {
-	return nil, nil
-}
+// Returns a map of CIDs to a list of provider peers who advertise that CID.
+// The output map is used to conduct PIR requests in RunPIRforProviderPeersRecords.
+// So internally, this method joins the datastore with the addrBook.
+// Rationale is below:
+// the datastore stores provider advertisements <CIDs, Peer ID providing that CID> --> expiry time.
+// the addrbook (address book) maps peer IDs to their multiaddresses
+// In Fetch, we first lookup the datastore for the peerIDs advertising a given CID key and then
+// we use the peerID as an index to lookup the address book for the multiaddresses.
+// We could lookup the datastore via PIR,
+// but then we cannot use that PIR output as an index to lookup the addressbook privately.
+// So we need to flatten out or join the two data structures for PIR to work.
+func (p *ProvidersBackend) MapCIDsToProviderPeersForPIR(ctx context.Context) (map[string][]*pb.Message_Peer, error) {
+	now := p.cfg.clk.Now()
 
-func (p *ProvidersBackend) JoinTablesForPrivateFetch(ctx context.Context) (any, error) {
+	mapCIDtoProviderSet := make(map[string]*providerSet)
+
 	datastore, err := p.datastore.GetAll(ctx)
-	return datastore, err
+
+	for dsKey, dsValue := range datastore {
+		// Drop expired provider advertisements
+		isRecordExpired, record := p.deleteExpiredRecords(ctx, now, dsKey, dsValue)
+		if isRecordExpired {
+			continue
+		}
+
+		// Get CID in string form, binary peer ID for lookup
+		cid, binPeerID, err := p.decomposeDatastoreKey(ctx, dsKey)
+		if err != nil {
+			continue
+		}
+
+		// Join step --- get multiaddresses from addrBook
+		multiaddresses := p.addrBook.Addrs(peer.ID(binPeerID))
+
+		addrInfo := peer.AddrInfo{
+			ID:    peer.ID(binPeerID),
+			Addrs: p.cfg.AddressFilter(multiaddresses),
+		}
+
+		// mapCIDtoProviderSet maps each CID to a set of providers.
+		// Initialize providerset if the map maps this cid to a nil.
+		if mapCIDtoProviderSet[cid] == nil {
+			mapCIDtoProviderSet[cid] =
+				&providerSet{
+					providers: []peer.AddrInfo{},
+					set:       make(map[peer.ID]time.Time)}
+		} else {
+			// Retrieve set of providers, add provider to set.
+			providerSetForCID := mapCIDtoProviderSet[cid]
+			providerSetForCID.addProvider(addrInfo, record.expiry)
+		}
+	}
+
+	mapCIDtoProviderPeers := make(map[string][]*pb.Message_Peer)
+
+	// Transforms the set of providers into a PB Message that can be marshalled into a byte array.
+	// This is based on how handleGetProviders processes the output of Fetch
+	// (they don't care about the set field of the providerSet (which maps peer IDs to times),
+	// presumably as we've already checked for expired provider advertisements.
+	// I think mapCIDtoProviderPeers cannot be constructed in the loop above
+	// (i.e. it needs to be constructed separately from mapCIDto ProviderPeers)
+	// since somehow there can be duplicate addrInfos for the same peerID and CID?
+	// providerSet's addProvider method rules them out.
+	for cid, providerSetForCID := range mapCIDtoProviderSet {
+		mapCIDtoProviderPeers[cid] = make([]*pb.Message_Peer, len(providerSetForCID.providers))
+		for i, provider := range providerSetForCID.providers {
+			mapCIDtoProviderPeers[cid][i] = pb.FromAddrInfo(provider)
+		}
+	}
+
+	return mapCIDtoProviderPeers, err
 }
 
 // Close is here to implement the [io.Closer] interface. This will get called
@@ -446,6 +513,21 @@ func (e *expiryRecord) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
+func (p *ProvidersBackend) deleteExpiredRecords(ctx context.Context, now time.Time, dsKey ds.Key, dsValue string) (isRecordExpired bool, record expiryRecord) {
+	isRecordExpired = false
+	rec := expiryRecord{}
+	if err := rec.UnmarshalBinary([]byte(dsValue)); err != nil {
+		p.log.LogAttrs(ctx, slog.LevelWarn, "Fetch provider record unmarshalling failed", slog.String("key", dsKey.String()), slog.String("err", err.Error()))
+		p.delete(ctx, dsKey)
+		isRecordExpired = true
+	} else if now.Sub(rec.expiry) > p.cfg.ProvideValidity {
+		// record is expired
+		p.delete(ctx, dsKey)
+		isRecordExpired = true
+	}
+	return isRecordExpired, rec
+}
+
 // A providerSet is used to gather provider information in a single struct. It
 // also makes sure that the user doesn't add any duplicate peers.
 type providerSet struct {
@@ -489,4 +571,23 @@ func newRoutingKey(namespace string, binStr string) string {
 	buffer.WriteString("/" + namespace + "/")
 	buffer.Write([]byte(binStr))
 	return buffer.String()
+}
+
+func (p *ProvidersBackend) decomposeDatastoreKey(ctx context.Context, key ds.Key) (cid string, binPeerID []byte, err error) {
+	keyStr := key.String()
+	idx := strings.LastIndex(key.String(), "/")
+	binCID, err := base32.RawStdEncoding.DecodeString(keyStr[:idx])
+	cid = string(binCID)
+	if err != nil {
+		p.log.LogAttrs(ctx, slog.LevelWarn, "base32 key decoding error", slog.String("key", keyStr[:idx]), slog.String("err", err.Error()))
+		p.delete(ctx, key)
+		return "", nil, err
+	}
+	binPeerID, err = base32.RawStdEncoding.DecodeString(keyStr[idx+1:])
+	if err != nil {
+		p.log.LogAttrs(ctx, slog.LevelWarn, "base32 key decoding error", slog.String("key", keyStr[idx+1:]), slog.String("err", err.Error()))
+		p.delete(ctx, key)
+		return "", nil, err
+	}
+	return cid, binPeerID, nil
 }

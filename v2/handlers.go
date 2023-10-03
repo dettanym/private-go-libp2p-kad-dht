@@ -338,10 +338,15 @@ func (d *DHT) handlePrivateGetProviderRecords(ctx context.Context, remote peer.I
 		return nil, fmt.Errorf("unsupported record type: %s", namespaceProviders)
 	}
 
-	// TODO: Figure out a reference to the dataStore attribute of the Backend.
-	// Or maybe this (runPIRforProviderPeerRecords) needs to be called from a PrivateFetch method on the Backend interface.
-	// The PrivateFetch method can compute the join privately and then just run this method internally, returning the encrypted providerpeers.
-	encrypted_provider_peers, err := private_routing.RunPIRforProviderPeersRecords(pirRequest, d.host.Peerstore(), nil)
+	// TODO: Typecasted as I only implemented the method below for the providersBackend
+	//  Can extend this to other backend types e.g. IPNS in the future.
+	newBackend := backend.(*ProvidersBackend)
+	mapCIDtoProviderPeers, err := newBackend.MapCIDsToProviderPeersForPIR(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("could not construct a map of CIDs to provider peers for PIR")
+	}
+
+	encrypted_provider_peers, err := private_routing.RunPIRforProviderPeersRecords(pirRequest, mapCIDtoProviderPeers)
 	pirResponse := &pb.PIR_Response{
 		Id:            pirRequest.Id,
 		CloserPeers:   encrypted_closer_peers,
