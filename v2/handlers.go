@@ -289,7 +289,7 @@ func (d *DHT) handlePrivateFindPeer(ctx context.Context, remote peer.ID, msg *pb
 		return nil, fmt.Errorf("no PIR Request sent in the message")
 	}
 
-	bucketsWithAddrInfos := d.normalizeRTJoinedWithPeerStore()
+	bucketsWithAddrInfos := d.normalizeRTJoinedWithPeerStore(kadt.PeerID(remote).Key())
 
 	encrypted_peer_ids, err := private_routing.RunPIRforCloserPeersRecords(pirRequest, bucketsWithAddrInfos)
 	if err != nil {
@@ -326,7 +326,7 @@ func (d *DHT) handlePrivateGetProviderRecords(ctx context.Context, remote peer.I
 		return nil, fmt.Errorf("no PIR Request sent in the message")
 	}
 
-	bucketsWithAddrInfos := d.normalizeRTJoinedWithPeerStore()
+	bucketsWithAddrInfos := d.normalizeRTJoinedWithPeerStore(kadt.PeerID(remote).Key())
 
 	encrypted_closer_peers, err := private_routing.RunPIRforCloserPeersRecords(pirRequest, bucketsWithAddrInfos)
 	if err != nil {
