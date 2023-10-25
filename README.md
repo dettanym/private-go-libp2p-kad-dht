@@ -7,6 +7,9 @@
 
 > A Go implementation of [libp2p Kademlia DHT specification](https://github.com/libp2p/specs/tree/master/kad-dht)
 
+## Archived
+Archived, moved to [private-zikade repo](https://github.com/plprobelab/zikade), which is a fork of [zikade](https://github.com/plprobelab/zikade). 
+
 ## Table of Contents
 
 - [Install](#install)
